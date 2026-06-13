@@ -12,7 +12,7 @@ import {
 } from "@/lib/config";
 import { ORIGIN_DOT } from "@/components/ui";
 import { ShareBar } from "@/components/ShareBar";
-import { buildFullRecap, buildCompactRecap } from "@/lib/export";
+import { buildFullRecap } from "@/lib/export";
 import type { Origin, Protein } from "@/lib/types";
 
 const ORIGINS: Origin[] = ["local", "italian", "asian", "world"];
@@ -91,8 +91,8 @@ export default function RecapPage() {
           Fiche de la semaine
         </h2>
         <p className="mb-3 text-xs text-slate-400">
-          Programme + liste de courses + recettes. Partagez vers Notes, Messages,
-          Mail ou WhatsApp.
+          Programme + liste de courses + recettes détaillées de chaque plat.
+          Partagez vers Notes, Messages, Mail ou WhatsApp.
         </p>
         <ShareBar
           title="Menus de la semaine"
@@ -100,13 +100,6 @@ export default function RecapPage() {
           whatsapp
           getText={() =>
             buildFullRecap(
-              store.plan!,
-              store.recipesById,
-              store.preferences.servings,
-            )
-          }
-          getWhatsappText={() =>
-            buildCompactRecap(
               store.plan!,
               store.recipesById,
               store.preferences.servings,

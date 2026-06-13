@@ -4,7 +4,6 @@ import {
   buildShoppingText,
   buildRecipesText,
   buildFullRecap,
-  buildCompactRecap,
 } from "./export";
 import type { Recipe, WeekPlan } from "./types";
 
@@ -71,19 +70,13 @@ describe("export texte", () => {
     expect(t).toContain("Cuire le riz.");
   });
 
-  it("la fiche complète réunit les trois sections", () => {
+  it("la fiche complète réunit programme, courses et recettes détaillées", () => {
     const t = buildFullRecap(plan, recipesById, 4);
     expect(t).toContain("PROGRAMME");
     expect(t).toContain("LISTE DE COURSES");
     expect(t).toContain("RECETTES");
-  });
-
-  it("la version compacte (WhatsApp) omet les étapes détaillées", () => {
-    const t = buildCompactRecap(plan, recipesById, 4);
-    expect(t).toContain("PROGRAMME");
-    expect(t).toContain("LISTE DE COURSES");
-    expect(t).not.toContain("Préparation :");
-    // Plus courte que la fiche intégrale.
-    expect(t.length).toBeLessThan(buildFullRecap(plan, recipesById, 4).length);
+    // Les recettes détaillées incluent les étapes de préparation.
+    expect(t).toContain("Préparation :");
+    expect(t).toContain("Cuire le riz.");
   });
 });
