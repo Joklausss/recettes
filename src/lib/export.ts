@@ -101,23 +101,3 @@ export function buildFullRecap(
     buildRecipesText(plan, recipesById),
   ].join(sep);
 }
-
-/**
- * Version compacte pour WhatsApp : programme + liste de courses + noms des
- * plats, sans les étapes détaillées. Tient dans un seul message (les liens
- * `wa.me` tronquent les textes trop longs). La fiche intégrale reste
- * disponible via le partage natif / la copie.
- */
-export function buildCompactRecap(
-  plan: WeekPlan,
-  recipesById: Map<string, Recipe>,
-  servings: number,
-): string {
-  const sep = "\n\n━━━━━━━━━━━━━━━━━━━━\n\n";
-  return [
-    `🗓️ MENUS DE LA SEMAINE\n${formatWeekRange(plan.weekStart)}`,
-    buildPlanText(plan, recipesById),
-    buildShoppingText(plan, recipesById, servings),
-    "ℹ️ Recettes détaillées disponibles via « Partager la fiche ».",
-  ].join(sep);
-}
