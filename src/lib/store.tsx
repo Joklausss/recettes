@@ -72,6 +72,8 @@ interface StoreValue extends PersistedState {
   regenerateWeek: () => void;
   newWeek: () => void;
   regenerateMeal: (day: number, slot: Slot) => void;
+  /** Place une recette précise du catalogue dans un créneau (repas verrouillé). */
+  assignMeal: (day: number, slot: Slot, recipeId: string) => void;
   toggleLock: (day: number, slot: Slot) => void;
   toggleFavorite: (recipeId: string) => void;
   isFavorite: (recipeId: string) => boolean;
@@ -216,6 +218,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const assignMeal = useCallback(
+    (day: number, slot: Slot, recipeId: string) => {
+      setState((s) => {
+        const weekStart = s.plan?.weekStart ?? currentWeekStart();
+        const existing = s.plan?.meals ?? [];
+        // Retire l'occupant du créneau + un éventuel « reste » qui en dépendait.
+        const replaced = existing.find(
+          (m) => m.day === day && m.slot === slot,
+        );
+        const meals = existing.filter(
+          (m) =>
+            !(m.day === day && m.slot === slot) &&
+            !(replaced && m.leftover && m.recipeId === replaced.recipeId),
+        );
+        meals.push({ day, slot, recipeId, leftover: false, locked: true });
+        const plan: WeekPlan = {
+          id: s.plan?.id ?? `plan-${weekStart}`,
+          weekStart,
+          createdAt: s.plan?.createdAt ?? new Date().toISOString(),
+          meals,
+        };
+        return { ...s, plan };
+      });
+    },
+    [],
+  );
+
   const toggleLock = useCallback((day: number, slot: Slot) => {
     setState((s) => {
       if (!s.plan) return s;
@@ -308,6 +337,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     regenerateWeek,
     newWeek,
     regenerateMeal,
+    assignMeal,
     toggleLock,
     toggleFavorite,
     isFavorite,

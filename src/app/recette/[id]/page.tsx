@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { OriginBadge, Tag } from "@/components/ui";
+import { AddToWeek } from "@/components/AddToWeek";
 import {
   BASE_LABELS,
   METHOD_LABELS,
@@ -58,7 +59,11 @@ export default function RecipePage({ params }: { params: { id: string } }) {
         <span>{"🔥".repeat(recipe.difficulty)}</span>
       </div>
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4">
+        <AddToWeek recipeId={recipe.id} />
+      </div>
+
+      <div className="mt-3 flex gap-2">
         <button
           onClick={() => store.toggleFavorite(recipe.id)}
           className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium active:scale-95 ${
