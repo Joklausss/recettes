@@ -4,6 +4,7 @@ import {
   buildShoppingText,
   buildRecipesText,
   buildFullRecap,
+  buildCompactRecap,
 } from "./export";
 import type { Recipe, WeekPlan } from "./types";
 
@@ -75,5 +76,14 @@ describe("export texte", () => {
     expect(t).toContain("PROGRAMME");
     expect(t).toContain("LISTE DE COURSES");
     expect(t).toContain("RECETTES");
+  });
+
+  it("la version compacte (WhatsApp) omet les étapes détaillées", () => {
+    const t = buildCompactRecap(plan, recipesById, 4);
+    expect(t).toContain("PROGRAMME");
+    expect(t).toContain("LISTE DE COURSES");
+    expect(t).not.toContain("Préparation :");
+    // Plus courte que la fiche intégrale.
+    expect(t.length).toBeLessThan(buildFullRecap(plan, recipesById, 4).length);
   });
 });

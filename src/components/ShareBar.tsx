@@ -10,6 +10,9 @@ interface Props {
   shareLabel?: string;
   /** Affiche le bouton WhatsApp dédié. */
   whatsapp?: boolean;
+  /** Texte spécifique à WhatsApp (par défaut : `getText`). Utile pour envoyer
+   *  une version compacte qui tient dans un seul message. */
+  getWhatsappText?: () => string;
 }
 
 type Feedback = { kind: "ok" | "err"; msg: string } | null;
@@ -24,6 +27,7 @@ export function ShareBar({
   getText,
   shareLabel = "Partager",
   whatsapp = false,
+  getWhatsappText,
 }: Props) {
   const [feedback, setFeedback] = useState<Feedback>(null);
 
@@ -60,7 +64,8 @@ export function ShareBar({
   };
 
   const onWhatsapp = () => {
-    window.open(whatsappHref(getText()), "_blank", "noopener,noreferrer");
+    const text = (getWhatsappText ?? getText)();
+    window.open(whatsappHref(text), "_blank", "noopener,noreferrer");
   };
 
   return (
