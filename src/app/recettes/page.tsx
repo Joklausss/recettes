@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { filterRecipes, sortRecipes, type RecipeQuery } from "@/lib/search";
 import { OriginBadge, Tag } from "@/components/ui";
+import { AddToWeek } from "@/components/AddToWeek";
 import {
   ORIGIN_LABELS,
   PROTEIN_LABELS,
@@ -178,11 +179,8 @@ export default function RecettesPage() {
 function RecipeRow({ recipe, fav }: { recipe: Recipe; fav: boolean }) {
   const total = recipe.prepTimeMin + recipe.cookTimeMin;
   return (
-    <Link
-      href={`/recette/${recipe.id}`}
-      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
-    >
-      <div className="min-w-0 flex-1">
+    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+      <Link href={`/recette/${recipe.id}`} className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <OriginBadge origin={recipe.origin} />
           {fav && <Tag className="bg-amber-100 text-amber-700">★</Tag>}
@@ -193,9 +191,9 @@ function RecipeRow({ recipe, fav }: { recipe: Recipe; fav: boolean }) {
         <div className="mt-0.5 text-xs text-slate-500">
           ⏱ {total} min · {recipe.nutrition.kcal} kcal
         </div>
-      </div>
-      <span className="text-slate-300">›</span>
-    </Link>
+      </Link>
+      <AddToWeek recipeId={recipe.id} variant="icon" />
+    </div>
   );
 }
 
