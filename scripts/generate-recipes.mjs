@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUT = join(__dirname, "..", "src", "data", "recipes.generated.json");
+const OUT = join(__dirname, "..", "public", "recipes.generated.json");
 const CURATED_NAMES = JSON.parse(
   readFileSync(join(__dirname, "curated-names.json"), "utf8"),
 );

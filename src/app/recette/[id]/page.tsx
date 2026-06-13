@@ -12,7 +12,7 @@ import {
 export default function RecipePage({ params }: { params: { id: string } }) {
   const store = useStore();
 
-  if (!store.hydrated) {
+  if (!store.ready) {
     return <p className="pt-10 text-center text-slate-400">Chargement…</p>;
   }
 

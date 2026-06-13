@@ -17,7 +17,10 @@ recettes simples et équilibrées, en optimisant le compromis entre **variété*
 ## Stack technique
 
 - **Next.js 14 (App Router) + TypeScript + Tailwind CSS**, mobile-first
-- **Recettes** : seed TypeScript typé (`src/data/recipes.ts`, ~54 recettes)
+- **Recettes** : 1100+ recettes. 54 curées (`src/data/curated.ts`) + ~1080
+  générées (`public/recipes.generated.json` via `scripts/generate-recipes.mjs`).
+  Le gros catalogue est servi en **asset statique** et chargé via `fetch` côté
+  client (hors bundle initial) pour rester léger sur mobile.
 - **Logique de génération** : module pur et isolé (`src/lib/`), couvert par des
   tests **Vitest**
 - **Persistance** : `localStorage`
@@ -71,13 +74,16 @@ Tout est centralisé dans **`src/lib/config.ts`** :
 
 ### Changer la région « locale »
 
-La cuisine « locale » est définie par les recettes `origin: "local"` du seed
-**`src/data/recipes.ts`**. Pour adapter la région :
+La cuisine « locale » correspond aux recettes `origin: "local"`. Pour adapter la
+région :
 
-1. Remplacez/complétez les recettes `"local"` par votre cuisine régionale.
-2. Veillez à conserver une **variété suffisante** (protéines, féculents, modes
-   de cuisson) pour 3–4 semaines sans répétition — visez ~20 recettes locales.
-3. Au besoin, ajustez les pourcentages dans `DEFAULT_ORIGIN_TARGETS`.
+1. Recettes écrites à la main : modifiez **`src/data/curated.ts`**.
+2. Recettes générées (le gros du catalogue) : adaptez la section `buildLocal()`
+   de **`scripts/generate-recipes.mjs`**, puis régénérez :
+   `node scripts/generate-recipes.mjs`.
+3. Veillez à conserver une **variété suffisante** (protéines, féculents, modes
+   de cuisson) pour ne pas répéter une recette sur ~4 semaines.
+4. Au besoin, ajustez les pourcentages dans `DEFAULT_ORIGIN_TARGETS`.
 
 ## Règles métier (résumé)
 
@@ -106,16 +112,22 @@ src/
 │   ├── ajouter/             # Ajout de recette perso
 │   └── recette/[id]/        # Détail recette
 ├── components/              # Composants UI réutilisables
-├── data/recipes.ts          # Seed des recettes (catalogue)
+├── data/
+│   ├── curated.ts           # 54 recettes écrites à la main
+│   └── recipes.ts           # Catalogue complet (tests uniquement)
 └── lib/
     ├── types.ts             # Modèle de données
     ├── config.ts            # ⚙️ Paramètres (origines, portions, batch…)
     ├── generator.ts         # 🧠 Algorithme de génération (pur, testé)
     ├── origin.ts            # Répartition par origine (+ convergence)
     ├── shoppingList.ts      # Agrégation de la liste de courses
-    ├── store.tsx            # État global + persistance localStorage
+    ├── export.ts            # Fiches texte (partage / WhatsApp / Notes)
+    ├── store.tsx            # État global + persistance localStorage + fetch recettes
     ├── rng.ts / date.ts     # Utilitaires
-    └── generator.test.ts    # Tests unitaires (Vitest)
+    └── *.test.ts            # Tests unitaires (Vitest)
+
+public/recipes.generated.json   # Catalogue généré (asset statique, chargé via fetch)
+scripts/generate-recipes.mjs     # Générateur du catalogue (déterministe)
 ```
 
 ## Tests
