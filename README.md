@@ -5,7 +5,11 @@ propose **14 repas** (déjeuner + dîner sur 7 jours) à partir d'un catalogue d
 recettes simples et équilibrées, en optimisant le compromis entre **variété** et
 **efficacité de préparation**.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Joklausss/recettes)
+
 - 📅 Planning 7 jours × (midi / soir), badges d'origine, temps, tag « restes »
+- 🔍 Catalogue : recherche plein texte (nom, ingrédient) + filtres (origine,
+  protéine, végé/poisson, ≤ 30 min, favoris)
 - 🔄 Régénération de la semaine entière ou d'un seul repas
 - 🔒 Verrouillage des repas qu'on aime avant de régénérer
 - 🛒 Liste de courses consolidée par rayon, quantités agrégées, cochable
