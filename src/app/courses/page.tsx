@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/lib/store";
 import { buildShoppingList } from "@/lib/shoppingList";
+import { buildShoppingText } from "@/lib/export";
+import { ShareBar } from "@/components/ShareBar";
 import { CATEGORY_LABELS } from "@/lib/config";
 
 export default function CoursesPage() {
@@ -45,6 +47,21 @@ export default function CoursesPage() {
           />
         </div>
       </header>
+
+      <div className="mb-5">
+        <ShareBar
+          title="Liste de courses"
+          shareLabel="Partager / Note iPhone"
+          whatsapp
+          getText={() =>
+            buildShoppingText(
+              store.plan!,
+              store.recipesById,
+              store.preferences.servings,
+            )
+          }
+        />
+      </div>
 
       <div className="space-y-5">
         {sections.map((section) => (
