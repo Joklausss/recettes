@@ -1,13 +1,19 @@
 import type { Recipe } from "@/lib/types";
+import generated from "./recipes.generated.json";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEED DE RECETTES — quantités données pour 4 portions (servings: 4).
 // Le générateur met les quantités à l'échelle selon le nombre de portions choisi.
-// Ajoutez/modifiez des recettes ici. Pour changer la région « locale »,
-// remplacez/complétez les recettes d'origine "local".
+//
+// `CURATED` : recettes écrites à la main (catalogue de base).
+// `recipes.generated.json` : ~450 recettes supplémentaires produites par
+//   `scripts/generate-recipes.mjs` (briques culinaires réalistes). Pour les
+//   régénérer : `node scripts/generate-recipes.mjs`.
+// L'export final `RECIPES` fusionne les deux. Ajoutez vos recettes perso dans
+// `CURATED`. Pour changer la région « locale », adaptez les recettes "local".
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const RECIPES: Recipe[] = [
+const CURATED: Recipe[] = [
   // ───────────────────────────── LOCALE (français/régional) ──────────────────
   {
     id: "loc-poulet-roti",
@@ -1554,5 +1560,10 @@ export const RECIPES: Recipe[] = [
     ],
   },
 ];
+
+// Les données JSON sont validées au runtime par `recipes.test.ts`.
+export const GENERATED = generated as unknown as Recipe[];
+
+export const RECIPES: Recipe[] = [...CURATED, ...GENERATED];
 
 export default RECIPES;

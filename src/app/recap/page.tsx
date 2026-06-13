@@ -11,6 +11,8 @@ import {
   PROTEIN_LABELS,
 } from "@/lib/config";
 import { ORIGIN_DOT } from "@/components/ui";
+import { ShareBar } from "@/components/ShareBar";
+import { buildFullRecap, buildCompactRecap } from "@/lib/export";
 import type { Origin, Protein } from "@/lib/types";
 
 const ORIGINS: Origin[] = ["local", "italian", "asian", "world"];
@@ -82,7 +84,36 @@ export default function RecapPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-bold">Récap de la semaine</h1>
+      <h1 className="mb-3 text-xl font-bold">Récap de la semaine</h1>
+
+      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Fiche de la semaine
+        </h2>
+        <p className="mb-3 text-xs text-slate-400">
+          Programme + liste de courses + recettes. Partagez vers Notes, Messages,
+          Mail ou WhatsApp.
+        </p>
+        <ShareBar
+          title="Menus de la semaine"
+          shareLabel="Partager la fiche"
+          whatsapp
+          getText={() =>
+            buildFullRecap(
+              store.plan!,
+              store.recipesById,
+              store.preferences.servings,
+            )
+          }
+          getWhatsappText={() =>
+            buildCompactRecap(
+              store.plan!,
+              store.recipesById,
+              store.preferences.servings,
+            )
+          }
+        />
+      </section>
 
       <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
