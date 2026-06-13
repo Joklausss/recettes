@@ -39,8 +39,8 @@ const CATEGORIES: IngredientCategory[] = [
 ];
 
 describe("catalogue de recettes", () => {
-  it("contient au moins 500 recettes", () => {
-    expect(RECIPES.length).toBeGreaterThanOrEqual(500);
+  it("contient au moins 1000 recettes", () => {
+    expect(RECIPES.length).toBeGreaterThanOrEqual(1000);
   });
 
   it("a des identifiants uniques", () => {
@@ -48,10 +48,15 @@ describe("catalogue de recettes", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("offre suffisamment de variété par origine (≥ 40 chacune)", () => {
+  it("a des noms uniques", () => {
+    const names = RECIPES.map((r) => r.name.toLowerCase());
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("offre suffisamment de variété par origine (≥ 100 chacune)", () => {
     for (const o of ORIGINS) {
       const n = RECIPES.filter((r) => r.origin === o).length;
-      expect(n, `origine ${o}`).toBeGreaterThanOrEqual(40);
+      expect(n, `origine ${o}`).toBeGreaterThanOrEqual(100);
     }
   });
 
@@ -63,8 +68,8 @@ describe("catalogue de recettes", () => {
         r.protein === "legumes" ||
         r.protein === "eggs",
     ).length;
-    expect(fish).toBeGreaterThanOrEqual(40);
-    expect(veg).toBeGreaterThanOrEqual(80);
+    expect(fish).toBeGreaterThanOrEqual(100);
+    expect(veg).toBeGreaterThanOrEqual(150);
   });
 
   it("respecte le schéma Recipe pour chaque entrée", () => {
