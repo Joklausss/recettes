@@ -22,11 +22,10 @@ import { currentWeekStart, isoDate } from "@/lib/date";
 import type { Preferences, Recipe, Slot, WeekPlan } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PERSISTANCE & ÉTAT GLOBAL
-// Choix : localStorage (voir README). Simple à déployer sur Vercel, aucun
-// serveur ni base de données ; toute la logique tourne côté client.
-// La logique de persistance est isolée ici pour pouvoir basculer vers une base
-// (Prisma/SQLite) plus tard sans toucher à l'UI.
+// PERSISTANCE & ÉTAT GLOBAL (multi-semaines)
+// Choix : localStorage. On conserve PLUSIEURS plans (un par semaine, indexés par
+// le lundi ISO) + un pointeur `currentWeek`. L'historique no-repeat / la
+// convergence des origines sont dérivés des semaines précédentes existantes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = "menus-hebdo-state-v1";
@@ -34,17 +33,26 @@ const STORAGE_KEY = "menus-hebdo-state-v1";
 interface PersistedState {
   preferences: Preferences;
   customRecipes: Recipe[];
-  plan: WeekPlan | null;
-  history: HistoryWeek[];
+  /** Plans indexés par weekStart (lundi ISO, ex. "2026-06-08"). */
+  plans: Record<string, WeekPlan>;
+  /** Semaine actuellement affichée. */
+  currentWeek: string;
 }
 
 function defaultState(): PersistedState {
   return {
     preferences: DEFAULT_PREFERENCES,
     customRecipes: [],
-    plan: null,
-    history: [],
+    plans: {},
+    currentWeek: currentWeekStart(),
   };
+}
+
+/** Décale un weekStart (lundi ISO) de `weeks` semaines. */
+function shiftWeekStart(weekStart: string, weeks: number): string {
+  const d = new Date(weekStart);
+  d.setDate(d.getDate() + weeks * 7);
+  return isoDate(d);
 }
 
 function load(): PersistedState {
@@ -52,29 +60,76 @@ function load(): PersistedState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
-    const parsed = JSON.parse(raw) as Partial<PersistedState>;
-    return {
-      ...defaultState(),
-      ...parsed,
-      preferences: { ...DEFAULT_PREFERENCES, ...parsed.preferences },
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const base = defaultState();
+    const preferences = {
+      ...DEFAULT_PREFERENCES,
+      ...(parsed.preferences as Partial<Preferences>),
     };
+    const customRecipes = (parsed.customRecipes as Recipe[]) ?? [];
+
+    // Migration depuis l'ancien format mono-semaine { plan, history }.
+    if (parsed.plan && !parsed.plans) {
+      const old = parsed.plan as WeekPlan;
+      return {
+        preferences,
+        customRecipes,
+        plans: { [old.weekStart]: old },
+        currentWeek: old.weekStart,
+      };
+    }
+
+    const plans = (parsed.plans as Record<string, WeekPlan>) ?? {};
+    const currentWeek =
+      (parsed.currentWeek as string) ||
+      Object.keys(plans).sort().pop() ||
+      base.currentWeek;
+    return { preferences, customRecipes, plans, currentWeek };
   } catch {
     return defaultState();
   }
 }
 
-interface StoreValue extends PersistedState {
+/** Historique (no-repeat + convergence) : jusqu'à N semaines avant `weekStart`. */
+function buildHistory(
+  plans: Record<string, WeekPlan>,
+  weekStart: string,
+  byId: Map<string, Recipe>,
+): HistoryWeek[] {
+  return Object.values(plans)
+    .filter((p) => p.weekStart < weekStart)
+    .sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1))
+    .slice(0, NO_REPEAT_WEEKS)
+    .map((p) => ({
+      weekStart: p.weekStart,
+      recipeIds: Array.from(new Set(p.meals.map((m) => m.recipeId))),
+      originCounts: originCountsOfPlan(p, byId),
+    }));
+}
+
+interface StoreValue {
+  preferences: Preferences;
+  customRecipes: Recipe[];
+  plans: Record<string, WeekPlan>;
+  currentWeek: string;
+  /** Plan de la semaine affichée (dérivé). */
+  plan: WeekPlan | null;
+  /** weekStarts ayant un plan, triés chronologiquement. */
+  weeks: string[];
   hydrated: boolean;
   /** localStorage chargé ET recettes générées récupérées. */
   ready: boolean;
   allRecipes: Recipe[];
   recipesById: Map<string, Recipe>;
+  generateWeek: () => void;
   regenerateWeek: () => void;
-  newWeek: () => void;
   regenerateMeal: (day: number, slot: Slot) => void;
-  /** Place une recette précise du catalogue dans un créneau (repas verrouillé). */
   assignMeal: (day: number, slot: Slot, recipeId: string) => void;
   toggleLock: (day: number, slot: Slot) => void;
+  goToWeek: (weekStart: string) => void;
+  shiftWeek: (weeks: number) => void;
+  goToToday: () => void;
+  deleteWeek: (weekStart: string) => void;
   toggleFavorite: (recipeId: string) => void;
   isFavorite: (recipeId: string) => boolean;
   setPreferences: (partial: Partial<Preferences>) => void;
@@ -89,11 +144,8 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(defaultState);
   const [hydrated, setHydrated] = useState(false);
-  // Recettes générées, chargées en asynchrone depuis l'asset statique
-  // (hors bundle initial). Les 54 curées sont déjà embarquées.
   const [generated, setGenerated] = useState<Recipe[]>([]);
   const [recipesReady, setRecipesReady] = useState(false);
-  // Pool courant (curées + générées) accessible dans les updaters setState.
   const poolRef = useRef<Recipe[]>(CURATED);
 
   useEffect(() => {
@@ -114,7 +166,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        // Repli : on fonctionne avec les recettes curées seules.
         setRecipesReady(true);
       });
     return () => {
@@ -122,13 +173,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Persiste à chaque changement (après hydratation).
   useEffect(() => {
     if (!hydrated) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      // quota plein / mode privé : on ignore silencieusement
+      // quota plein / mode privé : on ignore
     }
   }, [state, hydrated]);
 
@@ -141,92 +191,65 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [allRecipes],
   );
 
-  const regenerateWeek = useCallback(() => {
+  // Options de génération communes (lues depuis l'état courant `s`).
+  const genOptions = (s: PersistedState, weekStart: string) => {
+    const all = [...poolRef.current, ...s.customRecipes];
+    const byId = new Map(all.map((r) => [r.id, r] as const));
+    return {
+      recipes: all,
+      originTargets: s.preferences.originTargets,
+      history: buildHistory(s.plans, weekStart, byId),
+      excludedIngredients: s.preferences.excludedIngredients,
+      excludedRecipeIds: s.preferences.excludedRecipeIds,
+      favoriteRecipeIds: s.preferences.favoriteRecipeIds,
+      batchCookingEnabled: s.preferences.batchCookingEnabled,
+      noRepeatWeeks: NO_REPEAT_WEEKS,
+      weekStart,
+      seed: Math.floor(Math.random() * 1_000_000),
+    };
+  };
+
+  const generateWeek = useCallback(() => {
     setState((s) => {
-      const weekStart = s.plan?.weekStart ?? currentWeekStart();
-      const lockedMeals =
-        s.plan?.meals.filter((m) => m.locked) ?? [];
-      const plan = generateWeekPlan({
-        recipes: [...poolRef.current, ...s.customRecipes],
-        originTargets: s.preferences.originTargets,
-        history: s.history,
-        lockedMeals,
-        excludedIngredients: s.preferences.excludedIngredients,
-        excludedRecipeIds: s.preferences.excludedRecipeIds,
-        favoriteRecipeIds: s.preferences.favoriteRecipeIds,
-        batchCookingEnabled: s.preferences.batchCookingEnabled,
-        noRepeatWeeks: NO_REPEAT_WEEKS,
-        weekStart,
-        seed: Math.floor(Math.random() * 1_000_000),
-      });
-      return { ...s, plan };
+      const weekStart = s.currentWeek;
+      const plan = generateWeekPlan({ ...genOptions(s, weekStart), lockedMeals: [] });
+      return { ...s, plans: { ...s.plans, [weekStart]: plan } };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const newWeek = useCallback(() => {
+  const regenerateWeek = useCallback(() => {
     setState((s) => {
-      const all = [...poolRef.current, ...s.customRecipes];
-      const byId = new Map(all.map((r) => [r.id, r] as const));
-      // Archive le plan courant dans l'historique.
-      let history = s.history;
-      let weekStart = currentWeekStart();
-      if (s.plan) {
-        const archived: HistoryWeek = {
-          weekStart: s.plan.weekStart,
-          recipeIds: Array.from(
-            new Set(s.plan.meals.map((m) => m.recipeId)),
-          ),
-          originCounts: originCountsOfPlan(s.plan, byId),
-        };
-        history = [archived, ...s.history].slice(0, NO_REPEAT_WEEKS);
-        const next = new Date(s.plan.weekStart);
-        next.setDate(next.getDate() + 7);
-        weekStart = isoDate(next);
-      }
-      const plan = generateWeekPlan({
-        recipes: all,
-        originTargets: s.preferences.originTargets,
-        history,
-        lockedMeals: [],
-        excludedIngredients: s.preferences.excludedIngredients,
-        excludedRecipeIds: s.preferences.excludedRecipeIds,
-        favoriteRecipeIds: s.preferences.favoriteRecipeIds,
-        batchCookingEnabled: s.preferences.batchCookingEnabled,
-        noRepeatWeeks: NO_REPEAT_WEEKS,
-        weekStart,
-        seed: Math.floor(Math.random() * 1_000_000),
-      });
-      return { ...s, plan, history };
+      const weekStart = s.currentWeek;
+      const lockedMeals = s.plans[weekStart]?.meals.filter((m) => m.locked) ?? [];
+      const plan = generateWeekPlan({ ...genOptions(s, weekStart), lockedMeals });
+      return { ...s, plans: { ...s.plans, [weekStart]: plan } };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const regenerateMeal = useCallback((day: number, slot: Slot) => {
     setState((s) => {
-      if (!s.plan) return s;
-      const plan = regenerateSingleMeal(s.plan, day, slot, {
-        recipes: [...poolRef.current, ...s.customRecipes],
-        originTargets: s.preferences.originTargets,
-        history: s.history,
-        excludedIngredients: s.preferences.excludedIngredients,
-        excludedRecipeIds: s.preferences.excludedRecipeIds,
-        favoriteRecipeIds: s.preferences.favoriteRecipeIds,
-        batchCookingEnabled: s.preferences.batchCookingEnabled,
-        noRepeatWeeks: NO_REPEAT_WEEKS,
-        weekStart: s.plan.weekStart,
-      });
-      return { ...s, plan };
+      const existing = s.plans[s.currentWeek];
+      if (!existing) return s;
+      const plan = regenerateSingleMeal(
+        existing,
+        day,
+        slot,
+        genOptions(s, existing.weekStart),
+      );
+      return { ...s, plans: { ...s.plans, [s.currentWeek]: plan } };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const assignMeal = useCallback(
     (day: number, slot: Slot, recipeId: string) => {
       setState((s) => {
-        const weekStart = s.plan?.weekStart ?? currentWeekStart();
-        const existing = s.plan?.meals ?? [];
-        // Retire l'occupant du créneau + un éventuel « reste » qui en dépendait.
-        const replaced = existing.find(
-          (m) => m.day === day && m.slot === slot,
-        );
+        const weekStart = s.currentWeek;
+        const current = s.plans[weekStart];
+        const existing = current?.meals ?? [];
+        const replaced = existing.find((m) => m.day === day && m.slot === slot);
         const meals = existing.filter(
           (m) =>
             !(m.day === day && m.slot === slot) &&
@@ -234,12 +257,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
         meals.push({ day, slot, recipeId, leftover: false, locked: true });
         const plan: WeekPlan = {
-          id: s.plan?.id ?? `plan-${weekStart}`,
+          id: current?.id ?? `plan-${weekStart}`,
           weekStart,
-          createdAt: s.plan?.createdAt ?? new Date().toISOString(),
+          createdAt: current?.createdAt ?? new Date().toISOString(),
           meals,
         };
-        return { ...s, plan };
+        return { ...s, plans: { ...s.plans, [weekStart]: plan } };
       });
     },
     [],
@@ -247,11 +270,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toggleLock = useCallback((day: number, slot: Slot) => {
     setState((s) => {
-      if (!s.plan) return s;
-      const meals = s.plan.meals.map((m) =>
+      const current = s.plans[s.currentWeek];
+      if (!current) return s;
+      const meals = current.meals.map((m) =>
         m.day === day && m.slot === slot ? { ...m, locked: !m.locked } : m,
       );
-      return { ...s, plan: { ...s.plan, meals } };
+      return {
+        ...s,
+        plans: { ...s.plans, [s.currentWeek]: { ...current, meals } },
+      };
+    });
+  }, []);
+
+  const goToWeek = useCallback((weekStart: string) => {
+    setState((s) => ({ ...s, currentWeek: weekStart }));
+  }, []);
+
+  const shiftWeek = useCallback((weeks: number) => {
+    setState((s) => ({ ...s, currentWeek: shiftWeekStart(s.currentWeek, weeks) }));
+  }, []);
+
+  const goToToday = useCallback(() => {
+    setState((s) => ({ ...s, currentWeek: currentWeekStart() }));
+  }, []);
+
+  const deleteWeek = useCallback((weekStart: string) => {
+    setState((s) => {
+      const plans = { ...s.plans };
+      delete plans[weekStart];
+      return { ...s, plans };
     });
   }, []);
 
@@ -262,19 +309,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       else favs.add(recipeId);
       return {
         ...s,
-        preferences: {
-          ...s.preferences,
-          favoriteRecipeIds: Array.from(favs),
-        },
+        preferences: { ...s.preferences, favoriteRecipeIds: Array.from(favs) },
       };
     });
   }, []);
 
   const setPreferences = useCallback((partial: Partial<Preferences>) => {
-    setState((s) => ({
-      ...s,
-      preferences: { ...s.preferences, ...partial },
-    }));
+    setState((s) => ({ ...s, preferences: { ...s.preferences, ...partial } }));
   }, []);
 
   const addExcludedIngredient = useCallback((name: string) => {
@@ -311,10 +352,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       else ex.add(recipeId);
       return {
         ...s,
-        preferences: {
-          ...s.preferences,
-          excludedRecipeIds: Array.from(ex),
-        },
+        preferences: { ...s.preferences, excludedRecipeIds: Array.from(ex) },
       };
     });
   }, []);
@@ -328,17 +366,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.preferences.favoriteRecipeIds],
   );
 
+  const plan = state.plans[state.currentWeek] ?? null;
+  const weeks = useMemo(() => Object.keys(state.plans).sort(), [state.plans]);
+
   const value: StoreValue = {
-    ...state,
+    preferences: state.preferences,
+    customRecipes: state.customRecipes,
+    plans: state.plans,
+    currentWeek: state.currentWeek,
+    plan,
+    weeks,
     hydrated,
     ready: hydrated && recipesReady,
     allRecipes,
     recipesById,
+    generateWeek,
     regenerateWeek,
-    newWeek,
     regenerateMeal,
     assignMeal,
     toggleLock,
+    goToWeek,
+    shiftWeek,
+    goToToday,
+    deleteWeek,
     toggleFavorite,
     isFavorite,
     setPreferences,

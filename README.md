@@ -8,6 +8,8 @@ recettes simples et équilibrées, en optimisant le compromis entre **variété*
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Joklausss/recettes)
 
 - 📅 Planning 7 jours × (midi / soir), badges d'origine, temps, tag « restes »
+- 🗓️ Multi-semaines : naviguez entre semaines (‹ ›), un plan par semaine,
+  l'historique no-repeat / la convergence des origines se calculent tout seuls
 - 🔍 Catalogue : recherche plein texte (nom, ingrédient) + filtres (origine,
   protéine, végé/poisson, ≤ 30 min, favoris)
 - 🔄 Régénération de la semaine entière ou d'un seul repas
