@@ -13,7 +13,7 @@ export default function ReglagesPage() {
   const store = useStore();
   const [ingredient, setIngredient] = useState("");
 
-  if (!store.hydrated) {
+  if (!store.ready) {
     return <p className="pt-10 text-center text-slate-400">Chargement…</p>;
   }
 

@@ -20,7 +20,7 @@ export default function CoursesPage() {
     );
   }, [store.plan, store.recipesById, store.preferences.servings]);
 
-  if (!store.hydrated) {
+  if (!store.ready) {
     return <p className="pt-10 text-center text-slate-400">Chargement…</p>;
   }
 

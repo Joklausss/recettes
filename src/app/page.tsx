@@ -13,7 +13,7 @@ const SLOTS: { slot: Slot; label: string }[] = [
 export default function PlanningPage() {
   const store = useStore();
 
-  if (!store.hydrated) {
+  if (!store.ready) {
     return <LoadingState />;
   }
 

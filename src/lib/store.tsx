@@ -6,10 +6,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { RECIPES } from "@/data/recipes";
+import { CURATED } from "@/data/curated";
 import { DEFAULT_PREFERENCES, NO_REPEAT_WEEKS } from "@/lib/config";
 import {
   generateWeekPlan,
@@ -64,6 +65,8 @@ function load(): PersistedState {
 
 interface StoreValue extends PersistedState {
   hydrated: boolean;
+  /** localStorage chargé ET recettes générées récupérées. */
+  ready: boolean;
   allRecipes: Recipe[];
   recipesById: Map<string, Recipe>;
   regenerateWeek: () => void;
@@ -84,10 +87,37 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(defaultState);
   const [hydrated, setHydrated] = useState(false);
+  // Recettes générées, chargées en asynchrone depuis l'asset statique
+  // (hors bundle initial). Les 54 curées sont déjà embarquées.
+  const [generated, setGenerated] = useState<Recipe[]>([]);
+  const [recipesReady, setRecipesReady] = useState(false);
+  // Pool courant (curées + générées) accessible dans les updaters setState.
+  const poolRef = useRef<Recipe[]>(CURATED);
 
   useEffect(() => {
     setState(load());
     setHydrated(true);
+  }, []);
+
+  // Chargement asynchrone du gros catalogue (asset statique, mis en cache).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/recipes.generated.json")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Recipe[]) => {
+        if (cancelled) return;
+        setGenerated(data);
+        poolRef.current = [...CURATED, ...data];
+        setRecipesReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Repli : on fonctionne avec les recettes curées seules.
+        setRecipesReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persiste à chaque changement (après hydratation).
@@ -101,8 +131,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state, hydrated]);
 
   const allRecipes = useMemo(
-    () => [...RECIPES, ...state.customRecipes],
-    [state.customRecipes],
+    () => [...CURATED, ...generated, ...state.customRecipes],
+    [generated, state.customRecipes],
   );
   const recipesById = useMemo(
     () => new Map(allRecipes.map((r) => [r.id, r] as const)),
@@ -115,7 +145,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const lockedMeals =
         s.plan?.meals.filter((m) => m.locked) ?? [];
       const plan = generateWeekPlan({
-        recipes: [...RECIPES, ...s.customRecipes],
+        recipes: [...poolRef.current, ...s.customRecipes],
         originTargets: s.preferences.originTargets,
         history: s.history,
         lockedMeals,
@@ -133,7 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const newWeek = useCallback(() => {
     setState((s) => {
-      const all = [...RECIPES, ...s.customRecipes];
+      const all = [...poolRef.current, ...s.customRecipes];
       const byId = new Map(all.map((r) => [r.id, r] as const));
       // Archive le plan courant dans l'historique.
       let history = s.history;
@@ -172,7 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState((s) => {
       if (!s.plan) return s;
       const plan = regenerateSingleMeal(s.plan, day, slot, {
-        recipes: [...RECIPES, ...s.customRecipes],
+        recipes: [...poolRef.current, ...s.customRecipes],
         originTargets: s.preferences.originTargets,
         history: s.history,
         excludedIngredients: s.preferences.excludedIngredients,
@@ -272,6 +302,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value: StoreValue = {
     ...state,
     hydrated,
+    ready: hydrated && recipesReady,
     allRecipes,
     recipesById,
     regenerateWeek,

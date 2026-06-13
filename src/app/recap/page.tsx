@@ -68,7 +68,7 @@ export default function RecapPage() {
     };
   }, [store.plan, store.recipesById, store.preferences.originTargets]);
 
-  if (!store.hydrated) {
+  if (!store.ready) {
     return <p className="pt-10 text-center text-slate-400">Chargement…</p>;
   }
   if (!store.plan || !data) {
